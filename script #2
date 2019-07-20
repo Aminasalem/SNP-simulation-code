@@ -1,0 +1,143 @@
+require(tidyverse)
+require(gridExtra)
+require(ggplot2)
+
+getOneSimCoeff <- function(n_genes,n_obvs,rho){
+  df <- simulateSNP(n_genes,n_obvs,rho)
+  DF=sample(nrow(df),0.75*nrow(df),replace=F)
+  train=df[DF,]
+  test=df[-DF,]
+  
+  #logistic regression
+  glm.fit=glm(response~.,data=train,family=binomial)
+  summary(glm.fit)
+  itr_genes <- n_genes+1
+  coeff <- coef(glm.fit)[2:itr_genes]
+  coeff
+} #works perfectly
+
+getOneSimError <- function(n_genes,n_obvs,rho){
+  df <- simulateSNP(n_genes,n_obvs,rho)
+  DF <- sample(nrow(df),0.75*nrow(df),replace=F)
+  train=df[DF,]
+  test=df[-DF,]
+  
+  #logistic regression
+  glm.fit=glm(response~.,data=train,family=binomial)
+  summary(glm.fit)
+  coef(glm.fit)
+  
+  #error
+  glm.probs=predict(glm.fit,test,type="response")
+  glm.pred=rep(0,length(glm.probs))
+  glm.pred[glm.probs>.5]=1
+  table(glm.pred,test$response)
+  err=mean(glm.pred!=test$response)
+  err
+}
+
+getSimError <- function(n_genes,n_obvs,rho,n_sims){
+  simerrs <- rep(0,n_sims)
+  for ( i in 1:n_sims){
+    simerrs[i] <- getOneSimError(n_genes,n_obvs,rho)
+  }
+ mean(simerrs)
+}
+
+getSimCoeffs <- function(n_genes,n_obvs,rho,n_sims){
+  simcoeffs <- matrix(rep(0),nrow=n_sims,ncol=n_genes)
+  for ( k in 1:n_sims){
+  
+      simcoeffs[k,] <- getOneSimCoeff(n_genes,n_obvs,rho)
+    
+  }
+ colMeans(simcoeffs,na.rm=FALSE,dims=1)
+}
+
+getModelError <- function(n_genes,n_obvs,rho,n_sims){
+  diff <- matrix(rep(0),nrow=1,ncol=n_genes)
+  n_coeffs <- getSimCoeffs(n_genes,n_obvs,rho,n_sims)
+  beta <- getBeta(n_genes)
+  diff <- abs(beta-n_coeffs)
+  return(diff)
+}
+
+ # getSimSD <- function(n_genes,n_obvs,rho,n_sims){
+ #   simsds <- rep(0,n_sims)
+ #   for (i in 1:n_sims){
+ #     simsds[i] <- getOneSimError(n_genes,n_obvs,rho)
+ #   }
+ #   sd(simsds)
+ # }
+
+obvs_vec <- c(10,30,100,300,1000,3000,10000,30000,100000,300000)
+
+my_mean <- rep(0,length(obvs_vec))
+my_moderr <- rep(0,length(obvs_vec))
+# my_sd <- rep(0,length(obvs_vec))
+
+cnt <- 1
+itr <- 1
+# sdr <- 1 
+
+for(n_obvs in obvs_vec){
+  
+  #n_obvs <- 15
+  n_genes <- 10
+  rho <- 0.0
+  MEAN <- getSimError(n_genes,n_obvs,rho,2)
+  print(MEAN)
+  my_mean[cnt] <- MEAN
+  cnt <- cnt+1
+}
+
+ for(n_obvs in obvs_vec){
+   
+   #n_obvs <- 15
+   n_genes <- 10
+   rho <- 0.0
+   MODERR <- getModelError(n_genes,n_obvs,rho,2)
+   print(MODERR)
+   my_moderr[itr] <- MODERR
+   itr <- itr+1
+ }
+
+# for(n_obvs in obvs_vec){
+#   
+#   #n_obvs <- 15
+#   n_genes <- 10
+#   rho <- 0.0
+#   SD <- getSimSD(n_genes,n_obvs,rho,15)
+#   print(SD)
+#   my_sd[sdr] <- SD
+#   sdr <- sdr+1
+# }
+
+ 
+ df<-data.frame(obvs_vec,my_mean,my_moderr)#,my_sd)
+ p1 <- ggplot(data = df,mapping = aes(x = obvs_vec, y = my_mean),color="blue") + 
+       scale_x_continuous(trans = 'log10') + 
+       scale_y_continuous(trans = 'log10') +
+       geom_smooth(se=FALSE) +
+       geom_point(aes(col="red")) +
+       #geom_errorbar(aes(ymin=my_mean-my_sd,ymax=my_mean+my_sd),width=.2,position=position_dodge(.9)) +
+       #coord_trans(x="log10", y="log10") +
+       ggtitle("Plot of classification error vs number of observations") +
+       xlab("number of observations") +
+       ylab("mean error")
+ 
+ p2 <- ggplot(data=df,mapping = aes(x = obvs_vec, y = my_moderr),color="blue") +
+       scale_x_continuous(trans = 'log10') + 
+       scale_y_continuous(trans = 'log10') +
+       geom_smooth(se=FALSE) +
+       geom_point(aes(col="red")) +
+       ggtitle("Plot of ||c-β|| vs number of observations") +
+       xlab("number of observations") +
+       ylab("||c-β||")
+  
+ 
+ 
+ grid.arrange(p1,p2,nrow=1)
+
+
+
