@@ -1,0 +1,72 @@
+require(tidyverse)
+require(gridExtra)
+require(ggplot2)
+require(MASS)
+
+getOneQDASimError <- function(n_genes,n_obvs,rho){
+  df <- simulateSNP(n_genes,n_obvs,rho)
+  DF <- sample(nrow(df),0.75*nrow(df),replace=F)
+  train=df[DF,]
+  test=df[-DF,]
+  #print(dim(train))
+  #QDA
+  qda.fit=qda(response~.,data=train)
+  qda.fit
+  
+  #error
+  qda.pred=predict(qda.fit,test)
+  qda.class=qda.pred$class
+  table(qda.class,test$response)
+  err=mean(qda.class!=test$response)
+  err
+}
+
+getSimQDAError <- function(n_genes,n_obvs,rho,n_sims){
+  simerrs <- rep(0,n_sims)
+  for ( i in 1:n_sims){
+    simerrs[i] <- getOneSimError(n_genes,n_obvs,rho)
+  }
+  mean(simerrs)
+}
+
+
+
+obvs_vec <- c(10,30,100,300,1000,3000,10000,30000,100000,300000)
+
+my_QDAmean <- rep(0,length(obvs_vec))
+
+Qcnt <- 1
+
+for(n_obvs in obvs_vec){
+  n_obvs <- 1000
+  n_genes <- 100
+  rho <- 0.0
+  MEAN <- getSimQDAError(n_genes,n_obvs,rho,100)
+  print(MEAN)
+  my_mean[Qcnt] <- MEAN
+  Qcnt <- Qcnt+1
+}
+
+
+
+df<-data.frame(obvs_vec,my_QDAmean)
+
+#saveRDS(df,file="largeSNPS.rds",compress=TRUE)
+
+
+p1 <- ggplot(data = df,mapping = aes(x = obvs_vec, y = my_mean)) + 
+  theme_grey(base_size = 22) +
+  scale_x_continuous(trans = 'log10') + 
+  #scale_y_continuous(trans = 'log10') +
+  geom_line(linetype="solid",size=1.5) +
+  geom_point(aes(col="green"),shape=19,size=6) +
+  ggtitle("Classification error vs n") +
+  xlab("number of observations") +
+  ylab("mean error") +
+  theme(legend.position="none") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p1
+
+
+
